@@ -79,3 +79,88 @@ export async function updateProfile(
   }
   return res.json();
 }
+
+export interface Education {
+  id: string;
+  institution: string;
+  degree: string | null;
+  branch: string | null;
+  cgpa: string | null;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  category: string | null;
+  proficiency: number | null;
+}
+
+export async function getEducation(token: string): Promise<{ education: Education[] }> {
+  const res = await fetch(`${API_BASE}/api/education`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("failed to load education");
+  return res.json();
+}
+
+export async function addEducation(
+  token: string,
+  data: { institution: string; degree?: string; branch?: string; cgpa?: string }
+): Promise<{ success: boolean; id: string }> {
+  const res = await fetch(`${API_BASE}/api/education`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "failed to add education");
+  }
+  return res.json();
+}
+
+export async function deleteEducation(token: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/education/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("failed to delete education");
+}
+
+export async function getSkills(token: string): Promise<{ skills: Skill[] }> {
+  const res = await fetch(`${API_BASE}/api/skills`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("failed to load skills");
+  return res.json();
+}
+
+export async function addSkill(
+  token: string,
+  data: { name: string; category?: string; proficiency?: number }
+): Promise<{ success: boolean; id: string }> {
+  const res = await fetch(`${API_BASE}/api/skills`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "failed to add skill");
+  }
+  return res.json();
+}
+
+export async function deleteSkill(token: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/skills/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("failed to delete skill");
+}

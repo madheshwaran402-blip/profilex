@@ -4,6 +4,8 @@ import { validateUsername } from "./auth/validation";
 import { createVerificationToken, verifyEmailToken } from "./auth/verification";
 import { requireAuth } from "./middleware/auth";
 import { validateProfileUpdate, type ProfileUpdateInput } from "./profile/validation";
+import { handleEducationRoutes } from "./education/routes";
+import { handleSkillsRoutes } from "./skills/routes";
 
 export interface Env {
   DB: D1Database;
@@ -42,6 +44,12 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
+
+    const educationResponse = await handleEducationRoutes(request, env, url);
+    if (educationResponse) return educationResponse;
+
+    const skillsResponse = await handleSkillsRoutes(request, env, url);
+    if (skillsResponse) return skillsResponse;
 
     // --- SIGNUP ---
     if (url.pathname === "/api/auth/signup" && request.method === "POST") {
