@@ -3,6 +3,7 @@ import { createSession } from "./auth/session";
 import { validateUsername } from "./auth/validation";
 import { createVerificationToken, verifyEmailToken } from "./auth/verification";
 import { requireAuth } from "./middleware/auth";
+import { validateProfileUpdate, type ProfileUpdateInput } from "./profile/validation";
 
 export interface Env {
   DB: D1Database;
@@ -11,7 +12,10 @@ export interface Env {
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data, null, 2), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      "Access-Control-Allow-Origin": "http://localhost:5173",
+    },
   });
 }
 
@@ -28,6 +32,16 @@ async function hashTokenForLookup(token: string): Promise<string> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "http://localhost:5173",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    };
+
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
+    }
 
     // --- SIGNUP ---
     if (url.pathname === "/api/auth/signup" && request.method === "POST") {
@@ -279,6 +293,88 @@ export default {
         old_slug: profile.slug,
         new_slug: newSlug,
       });
+    }
+
+// --- GET PROFILE ---
+    if (url.pathname === "/api/profile" && request.method === "GET") {
+      const auth = await requireAuth(request, env);
+      if ("error" in auth) return auth.error;
+
+      const profile = await env.DB.prepare(
+        `SELECT id, name, title, location, about, photo_url, ai_personality,
+                ai_enabled, slug, published, created_at, updated_at
+         FROM profiles WHERE user_id = ?`
+      )
+        .bind(auth.userId)
+        .first();
+
+      if (!profile) return json({ error: "profile not found" }, 404);
+
+      return json({ profile });
+    }
+
+    // --- UPDATE PROFILE ---
+    if (url.pathname === "/api/profile" && request.method === "PUT") {
+      const auth = await requireAuth(request, env);
+      if ("error" in auth) return auth.error;
+
+      const body = (await request.json()) as ProfileUpdateInput;
+
+      const validationError = validateProfileUpdate(body);
+      if (validationError) {
+        return json({ error: validationError }, 400);
+      }
+
+      const existing = await env.DB.prepare(
+        `SELECT id FROM profiles WHERE user_id = ?`
+      )
+        .bind(auth.userId)
+        .first<{ id: string }>();
+
+      if (!existing) return json({ error: "profile not found" }, 404);
+
+      const now = new Date().toISOString();
+
+      const fields: string[] = [];
+      const values: unknown[] = [];
+
+      for (const key of [
+        "name",
+        "title",
+        "location",
+        "about",
+        "photo_url",
+        "ai_personality",
+      ] as const) {
+        if (body[key] !== undefined) {
+          fields.push(`${key} = ?`);
+          values.push(body[key]);
+        }
+      }
+
+      if (fields.length === 0) {
+        return json({ error: "no fields provided to update" }, 400);
+      }
+
+      fields.push(`updated_at = ?`);
+      values.push(now);
+      values.push(auth.userId);
+
+      await env.DB.prepare(
+        `UPDATE profiles SET ${fields.join(", ")} WHERE user_id = ?`
+      )
+        .bind(...values)
+        .run();
+
+      const updated = await env.DB.prepare(
+        `SELECT id, name, title, location, about, photo_url, ai_personality,
+                ai_enabled, slug, published, created_at, updated_at
+         FROM profiles WHERE user_id = ?`
+      )
+        .bind(auth.userId)
+        .first();
+
+      return json({ success: true, profile: updated });
     }
 
     // --- PROTECTED: current logged-in user ---
