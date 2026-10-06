@@ -1,5 +1,7 @@
 import { hashPassword, verifyPassword } from "./auth/crypto";
 import { createSession, validateSession } from "./auth/session";
+import { validateUsername } from "./auth/validation";
+import { requireAuth } from "./middleware/auth";
 
 export interface Env {
   DB: D1Database;
@@ -12,8 +14,14 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
-function slugify(username: string): string {
-  return username.toLowerCase().replace(/[^a-z0-9-]/g, "");
+async function hashTokenForLookup(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(token)
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export default {
@@ -36,10 +44,17 @@ export default {
         return json({ error: "password must be at least 8 characters" }, 400);
       }
 
+      const usernameError = validateUsername(username);
+      if (usernameError) {
+        return json({ error: usernameError }, 400);
+      }
+
+      const normalizedUsername = username.toLowerCase();
+
       const existing = await env.DB.prepare(
         `SELECT id FROM users WHERE email = ? OR username = ?`
       )
-        .bind(email, username)
+        .bind(email, normalizedUsername)
         .first();
 
       if (existing) {
@@ -50,25 +65,24 @@ export default {
       const userId = crypto.randomUUID();
       const profileId = crypto.randomUUID();
       const passwordHash = await hashPassword(password);
-      const slug = slugify(username);
 
       await env.DB.batch([
         env.DB.prepare(
           `INSERT INTO users (id, email, username, password_hash, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?)`
-        ).bind(userId, email, username, passwordHash, now, now),
+        ).bind(userId, email, normalizedUsername, passwordHash, now, now),
 
         env.DB.prepare(
           `INSERT INTO profiles (id, user_id, name, slug, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?)`
-        ).bind(profileId, userId, username, slug, now, now),
+        ).bind(profileId, userId, normalizedUsername, normalizedUsername, now, now),
       ]);
 
       const token = await createSession(env, userId);
 
       return json({
         success: true,
-        user: { id: userId, username, email },
+        user: { id: userId, username: normalizedUsername, email },
         session_token: token,
       });
     }
@@ -106,24 +120,31 @@ export default {
       });
     }
 
+    // --- LOGOUT ---
+    if (url.pathname === "/api/auth/logout" && request.method === "POST") {
+      const auth = await requireAuth(request, env);
+      if ("error" in auth) return auth.error;
+
+      const authHeader = request.headers.get("Authorization");
+      const token = authHeader!.replace("Bearer ", "");
+      const tokenHash = await hashTokenForLookup(token);
+
+      await env.DB.prepare(`DELETE FROM sessions WHERE token_hash = ?`)
+        .bind(tokenHash)
+        .run();
+
+      return json({ success: true, message: "logged out" });
+    }
+
     // --- PROTECTED: current logged-in user ---
     if (url.pathname === "/api/me" && request.method === "GET") {
-      const authHeader = request.headers.get("Authorization");
-      const token = authHeader?.replace("Bearer ", "");
-
-      if (!token) {
-        return json({ error: "missing session token" }, 401);
-      }
-
-      const userId = await validateSession(env, token);
-      if (!userId) {
-        return json({ error: "invalid or expired session" }, 401);
-      }
+      const auth = await requireAuth(request, env);
+      if ("error" in auth) return auth.error;
 
       const user = await env.DB.prepare(
         `SELECT id, email, username, created_at FROM users WHERE id = ?`
       )
-        .bind(userId)
+        .bind(auth.userId)
         .first();
 
       return json({ user });
