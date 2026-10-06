@@ -1,6 +1,7 @@
 import { hashPassword, verifyPassword } from "./auth/crypto";
-import { createSession, validateSession } from "./auth/session";
+import { createSession } from "./auth/session";
 import { validateUsername } from "./auth/validation";
+import { createVerificationToken, verifyEmailToken } from "./auth/verification";
 import { requireAuth } from "./middleware/auth";
 
 export interface Env {
@@ -136,13 +137,157 @@ export default {
       return json({ success: true, message: "logged out" });
     }
 
+    // --- REQUEST EMAIL VERIFICATION ---
+    if (url.pathname === "/api/auth/request-verification" && request.method === "POST") {
+      const auth = await requireAuth(request, env);
+      if ("error" in auth) return auth.error;
+
+      const token = await createVerificationToken(env, auth.userId);
+
+      // NOTE: no email service wired up yet (that's a later day).
+      // For now we return the token directly so you can test the flow.
+      return json({
+        success: true,
+        message: "verification token created (would normally be emailed)",
+        verification_token: token,
+      });
+    }
+
+    // --- VERIFY EMAIL ---
+    if (url.pathname === "/api/auth/verify-email" && request.method === "POST") {
+      const body = (await request.json()) as { token?: string };
+      if (!body.token) {
+        return json({ error: "token is required" }, 400);
+      }
+
+      const userId = await verifyEmailToken(env, body.token);
+      if (!userId) {
+        return json({ error: "invalid or expired verification token" }, 400);
+      }
+
+      return json({ success: true, message: "email verified" });
+    }
+
+    // --- ACCOUNT SETTINGS: update name / password ---
+    if (url.pathname === "/api/settings" && request.method === "PUT") {
+      const auth = await requireAuth(request, env);
+      if ("error" in auth) return auth.error;
+
+      const body = (await request.json()) as {
+        name?: string;
+        current_password?: string;
+        new_password?: string;
+      };
+
+      const now = new Date().toISOString();
+
+      if (body.new_password) {
+        if (!body.current_password) {
+          return json({ error: "current_password is required to set a new password" }, 400);
+        }
+        if (body.new_password.length < 8) {
+          return json({ error: "new password must be at least 8 characters" }, 400);
+        }
+
+        const user = await env.DB.prepare(
+          `SELECT password_hash FROM users WHERE id = ?`
+        )
+          .bind(auth.userId)
+          .first<{ password_hash: string }>();
+
+        if (!user) return json({ error: "user not found" }, 404);
+
+        const valid = await verifyPassword(body.current_password, user.password_hash);
+        if (!valid) {
+          return json({ error: "current password is incorrect" }, 401);
+        }
+
+        const newHash = await hashPassword(body.new_password);
+        await env.DB.prepare(
+          `UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?`
+        )
+          .bind(newHash, now, auth.userId)
+          .run();
+      }
+
+      if (body.name) {
+        await env.DB.prepare(
+          `UPDATE profiles SET name = ?, updated_at = ? WHERE user_id = ?`
+        )
+          .bind(body.name, now, auth.userId)
+          .run();
+      }
+
+      return json({ success: true, message: "settings updated" });
+    }
+
+    // --- CHANGE SLUG / USERNAME (public URL) ---
+    if (url.pathname === "/api/settings/slug" && request.method === "PUT") {
+      const auth = await requireAuth(request, env);
+      if ("error" in auth) return auth.error;
+
+      const body = (await request.json()) as { new_slug?: string };
+      if (!body.new_slug) {
+        return json({ error: "new_slug is required" }, 400);
+      }
+
+      const slugError = validateUsername(body.new_slug);
+      if (slugError) {
+        return json({ error: slugError }, 400);
+      }
+
+      const newSlug = body.new_slug.toLowerCase();
+
+      const profile = await env.DB.prepare(
+        `SELECT id, slug FROM profiles WHERE user_id = ?`
+      )
+        .bind(auth.userId)
+        .first<{ id: string; slug: string }>();
+
+      if (!profile) return json({ error: "profile not found" }, 404);
+
+      if (profile.slug === newSlug) {
+        return json({ error: "this is already your current slug" }, 400);
+      }
+
+      const taken = await env.DB.prepare(
+        `SELECT id FROM profiles WHERE slug = ?`
+      )
+        .bind(newSlug)
+        .first();
+
+      if (taken) {
+        return json({ error: "this slug is already taken" }, 409);
+      }
+
+      const now = new Date().toISOString();
+
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO profile_slug_history (id, profile_id, old_slug, changed_at)
+           VALUES (?, ?, ?, ?)`
+        ).bind(crypto.randomUUID(), profile.id, profile.slug, now),
+
+        env.DB.prepare(
+          `UPDATE profiles SET slug = ?, updated_at = ? WHERE id = ?`
+        ).bind(newSlug, now, profile.id),
+      ]);
+
+      return json({
+        success: true,
+        message: "slug updated",
+        old_slug: profile.slug,
+        new_slug: newSlug,
+      });
+    }
+
     // --- PROTECTED: current logged-in user ---
     if (url.pathname === "/api/me" && request.method === "GET") {
       const auth = await requireAuth(request, env);
       if ("error" in auth) return auth.error;
 
       const user = await env.DB.prepare(
-        `SELECT id, email, username, created_at FROM users WHERE id = ?`
+        `SELECT id, email, username, email_verified, created_at FROM users WHERE id = ?`
       )
         .bind(auth.userId)
         .first();
