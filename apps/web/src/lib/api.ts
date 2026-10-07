@@ -249,3 +249,55 @@ export async function deleteAchievement(token: string, id: string): Promise<void
   });
   if (!res.ok) throw new Error("failed to delete achievement");
 }
+
+export interface Project {
+  id: string;
+  name: string;
+  short_description: string | null;
+  tech_stack: string | null;
+  github_url: string | null;
+  demo_url: string | null;
+  featured: number;
+}
+
+export async function getProjects(token: string): Promise<{ projects: Project[] }> {
+  const res = await fetch(`${API_BASE}/api/projects`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("failed to load projects");
+  return res.json();
+}
+
+export async function addProject(
+  token: string,
+  data: {
+    name: string;
+    short_description?: string;
+    tech_stack?: string;
+    github_url?: string;
+    demo_url?: string;
+    featured?: boolean;
+  }
+): Promise<{ success: boolean; id: string }> {
+  const res = await fetch(`${API_BASE}/api/projects`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "failed to add project");
+  }
+  return res.json();
+}
+
+export async function deleteProject(token: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/projects/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("failed to delete project");
+}

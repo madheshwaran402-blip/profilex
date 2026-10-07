@@ -8,6 +8,7 @@ import { handleEducationRoutes } from "./education/routes";
 import { handleSkillsRoutes } from "./skills/routes";
 import { handleExperienceRoutes } from "./experience/routes";
 import { handleAchievementsRoutes } from "./achievements/routes";
+import { handleProjectsRoutes } from "./projects/routes";
 
 export interface Env {
   DB: D1Database;
@@ -58,6 +59,9 @@ export default {
 
     const achievementsResponse = await handleAchievementsRoutes(request, env, url);
     if (achievementsResponse) return achievementsResponse;
+
+    const projectsResponse = await handleProjectsRoutes(request, env, url);
+    if (projectsResponse) return projectsResponse;
 
     // --- SIGNUP ---
     if (url.pathname === "/api/auth/signup" && request.method === "POST") {

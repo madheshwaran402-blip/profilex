@@ -16,11 +16,15 @@ import {
   getAchievements,
   addAchievement,
   deleteAchievement,
+  getProjects,
+  addProject,
+  deleteProject,
   type Profile,
   type Education,
   type Skill,
   type Experience,
   type Achievement,
+  type Project,
 } from "./lib/api";
 
 function App() {
@@ -52,6 +56,12 @@ function App() {
   const [achTitle, setAchTitle] = useState("");
   const [achType, setAchType] = useState("");
 
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectName, setProjectName] = useState("");
+  const [projectDesc, setProjectDesc] = useState("");
+  const [projectTech, setProjectTech] = useState("");
+  const [projectGithub, setProjectGithub] = useState("");
+
   async function loadEverything(tok: string) {
     const { profile } = await getProfile(tok);
     setProfile(profile);
@@ -62,6 +72,7 @@ function App() {
     setSkills((await getSkills(tok)).skills);
     setExperience((await getExperience(tok)).experience);
     setAchievements((await getAchievements(tok)).achievements);
+    setProjects((await getProjects(tok)).projects);
   }
 
   async function handleAuth() {
@@ -138,6 +149,27 @@ function App() {
     if (!token) return;
     await deleteAchievement(token, id);
     setAchievements((await getAchievements(token)).achievements);
+  }
+
+  async function handleAddProject() {
+    if (!token || !projectName) return;
+    await addProject(token, {
+      name: projectName,
+      short_description: projectDesc,
+      tech_stack: projectTech,
+      github_url: projectGithub,
+    });
+    setProjectName("");
+    setProjectDesc("");
+    setProjectTech("");
+    setProjectGithub("");
+    setProjects((await getProjects(token)).projects);
+  }
+
+  async function handleDeleteProject(id: string) {
+    if (!token) return;
+    await deleteProject(token, id);
+    setProjects((await getProjects(token)).projects);
   }
 
   if (!token || !profile) {
@@ -268,6 +300,34 @@ function App() {
           <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Title" value={achTitle} onChange={(e) => setAchTitle(e.target.value)} />
           <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Type (e.g. hackathon)" value={achType} onChange={(e) => setAchType(e.target.value)} />
           <button onClick={handleAddAchievement} className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold rounded px-3 py-2">Add Achievement</button>
+        </div>
+
+        <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
+          <h2 className="text-xl font-bold text-cyan-400">Projects</h2>
+          {projects.map((p) => (
+            <div key={p.id} className="bg-slate-700 rounded px-3 py-3 flex flex-col gap-1">
+              <div className="flex justify-between items-center">
+                <span className="text-white font-semibold text-sm">{p.name}</span>
+                <button onClick={() => handleDeleteProject(p.id)} className="text-red-400 text-xs">Delete</button>
+              </div>
+              {p.short_description && (
+                <span className="text-slate-300 text-xs">{p.short_description}</span>
+              )}
+              {p.tech_stack && (
+                <span className="text-cyan-400 text-xs">{p.tech_stack}</span>
+              )}
+              {p.github_url && (
+                <a href={p.github_url} target="_blank" rel="noreferrer" className="text-blue-400 text-xs underline">
+                  GitHub
+                </a>
+              )}
+            </div>
+          ))}
+          <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Project name" value={projectName} onChange={(e) => setProjectName(e.target.value)} />
+          <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Short description" value={projectDesc} onChange={(e) => setProjectDesc(e.target.value)} />
+          <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Tech stack (comma separated)" value={projectTech} onChange={(e) => setProjectTech(e.target.value)} />
+          <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="GitHub URL" value={projectGithub} onChange={(e) => setProjectGithub(e.target.value)} />
+          <button onClick={handleAddProject} className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold rounded px-3 py-2">Add Project</button>
         </div>
 
         {error && <p className="text-red-400 text-sm">{error}</p>}
