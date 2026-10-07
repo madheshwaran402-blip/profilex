@@ -164,3 +164,88 @@ export async function deleteSkill(token: string, id: string): Promise<void> {
   });
   if (!res.ok) throw new Error("failed to delete skill");
 }
+
+export interface Experience {
+  id: string;
+  company: string;
+  role: string | null;
+  start_date: string | null;
+  end_date: string | null;
+}
+
+export interface Achievement {
+  id: string;
+  title: string;
+  type: string | null;
+  date: string | null;
+}
+
+export async function getExperience(token: string): Promise<{ experience: Experience[] }> {
+  const res = await fetch(`${API_BASE}/api/experience`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("failed to load experience");
+  return res.json();
+}
+
+export async function addExperience(
+  token: string,
+  data: { company: string; role?: string; start_date?: string; end_date?: string }
+): Promise<{ success: boolean; id: string }> {
+  const res = await fetch(`${API_BASE}/api/experience`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "failed to add experience");
+  }
+  return res.json();
+}
+
+export async function deleteExperience(token: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/experience/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("failed to delete experience");
+}
+
+export async function getAchievements(token: string): Promise<{ achievements: Achievement[] }> {
+  const res = await fetch(`${API_BASE}/api/achievements`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("failed to load achievements");
+  return res.json();
+}
+
+export async function addAchievement(
+  token: string,
+  data: { title: string; type?: string; date?: string }
+): Promise<{ success: boolean; id: string }> {
+  const res = await fetch(`${API_BASE}/api/achievements`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "failed to add achievement");
+  }
+  return res.json();
+}
+
+export async function deleteAchievement(token: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/achievements/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("failed to delete achievement");
+}

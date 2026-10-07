@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   signup,
   login,
@@ -10,9 +10,17 @@ import {
   getSkills,
   addSkill,
   deleteSkill,
+  getExperience,
+  addExperience,
+  deleteExperience,
+  getAchievements,
+  addAchievement,
+  deleteAchievement,
   type Profile,
   type Education,
   type Skill,
+  type Experience,
+  type Achievement,
 } from "./lib/api";
 
 function App() {
@@ -36,17 +44,24 @@ function App() {
   const [skillName, setSkillName] = useState("");
   const [skillCategory, setSkillCategory] = useState("");
 
+  const [experience, setExperience] = useState<Experience[]>([]);
+  const [company, setCompany] = useState("");
+  const [role, setRole] = useState("");
+
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [achTitle, setAchTitle] = useState("");
+  const [achType, setAchType] = useState("");
+
   async function loadEverything(tok: string) {
     const { profile } = await getProfile(tok);
     setProfile(profile);
     setTitle(profile.title || "");
     setAbout(profile.about || "");
 
-    const { education } = await getEducation(tok);
-    setEducation(education);
-
-    const { skills } = await getSkills(tok);
-    setSkills(skills);
+    setEducation((await getEducation(tok)).education);
+    setSkills((await getSkills(tok)).skills);
+    setExperience((await getExperience(tok)).experience);
+    setAchievements((await getAchievements(tok)).achievements);
   }
 
   async function handleAuth() {
@@ -74,15 +89,13 @@ function App() {
     await addEducation(token, { institution, degree });
     setInstitution("");
     setDegree("");
-    const { education } = await getEducation(token);
-    setEducation(education);
+    setEducation((await getEducation(token)).education);
   }
 
   async function handleDeleteEducation(id: string) {
     if (!token) return;
     await deleteEducation(token, id);
-    const { education } = await getEducation(token);
-    setEducation(education);
+    setEducation((await getEducation(token)).education);
   }
 
   async function handleAddSkill() {
@@ -90,15 +103,41 @@ function App() {
     await addSkill(token, { name: skillName, category: skillCategory });
     setSkillName("");
     setSkillCategory("");
-    const { skills } = await getSkills(token);
-    setSkills(skills);
+    setSkills((await getSkills(token)).skills);
   }
 
   async function handleDeleteSkill(id: string) {
     if (!token) return;
     await deleteSkill(token, id);
-    const { skills } = await getSkills(token);
-    setSkills(skills);
+    setSkills((await getSkills(token)).skills);
+  }
+
+  async function handleAddExperience() {
+    if (!token || !company) return;
+    await addExperience(token, { company, role });
+    setCompany("");
+    setRole("");
+    setExperience((await getExperience(token)).experience);
+  }
+
+  async function handleDeleteExperience(id: string) {
+    if (!token) return;
+    await deleteExperience(token, id);
+    setExperience((await getExperience(token)).experience);
+  }
+
+  async function handleAddAchievement() {
+    if (!token || !achTitle) return;
+    await addAchievement(token, { title: achTitle, type: achType || undefined });
+    setAchTitle("");
+    setAchType("");
+    setAchievements((await getAchievements(token)).achievements);
+  }
+
+  async function handleDeleteAchievement(id: string) {
+    if (!token) return;
+    await deleteAchievement(token, id);
+    setAchievements((await getAchievements(token)).achievements);
   }
 
   if (!token || !profile) {
@@ -180,77 +219,55 @@ function App() {
         <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
           <h2 className="text-xl font-bold text-cyan-400">Education</h2>
           {education.map((e) => (
-            <div
-              key={e.id}
-              className="bg-slate-700 rounded px-3 py-2 flex justify-between items-center"
-            >
-              <span className="text-white text-sm">
-                {e.institution} {e.degree && `— ${e.degree}`}
-              </span>
-              <button
-                onClick={() => handleDeleteEducation(e.id)}
-                className="text-red-400 text-xs"
-              >
-                Delete
-              </button>
+            <div key={e.id} className="bg-slate-700 rounded px-3 py-2 flex justify-between items-center">
+              <span className="text-white text-sm">{e.institution} {e.degree && `— ${e.degree}`}</span>
+              <button onClick={() => handleDeleteEducation(e.id)} className="text-red-400 text-xs">Delete</button>
             </div>
           ))}
-          <input
-            className="bg-slate-700 text-white rounded px-3 py-2"
-            placeholder="Institution"
-            value={institution}
-            onChange={(e) => setInstitution(e.target.value)}
-          />
-          <input
-            className="bg-slate-700 text-white rounded px-3 py-2"
-            placeholder="Degree"
-            value={degree}
-            onChange={(e) => setDegree(e.target.value)}
-          />
-          <button
-            onClick={handleAddEducation}
-            className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold rounded px-3 py-2"
-          >
-            Add Education
-          </button>
+          <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Institution" value={institution} onChange={(e) => setInstitution(e.target.value)} />
+          <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Degree" value={degree} onChange={(e) => setDegree(e.target.value)} />
+          <button onClick={handleAddEducation} className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold rounded px-3 py-2">Add Education</button>
         </div>
 
         <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
           <h2 className="text-xl font-bold text-cyan-400">Skills</h2>
           <div className="flex flex-wrap gap-2">
             {skills.map((s) => (
-              <span
-                key={s.id}
-                className="bg-slate-700 text-white text-sm rounded-full px-3 py-1 flex items-center gap-2"
-              >
+              <span key={s.id} className="bg-slate-700 text-white text-sm rounded-full px-3 py-1 flex items-center gap-2">
                 {s.name}
-                <button
-                  onClick={() => handleDeleteSkill(s.id)}
-                  className="text-red-400 text-xs"
-                >
-                  ✕
-                </button>
+                <button onClick={() => handleDeleteSkill(s.id)} className="text-red-400 text-xs">✕</button>
               </span>
             ))}
           </div>
-          <input
-            className="bg-slate-700 text-white rounded px-3 py-2"
-            placeholder="Skill name"
-            value={skillName}
-            onChange={(e) => setSkillName(e.target.value)}
-          />
-          <input
-            className="bg-slate-700 text-white rounded px-3 py-2"
-            placeholder="Category (optional)"
-            value={skillCategory}
-            onChange={(e) => setSkillCategory(e.target.value)}
-          />
-          <button
-            onClick={handleAddSkill}
-            className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold rounded px-3 py-2"
-          >
-            Add Skill
-          </button>
+          <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Skill name" value={skillName} onChange={(e) => setSkillName(e.target.value)} />
+          <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Category (optional)" value={skillCategory} onChange={(e) => setSkillCategory(e.target.value)} />
+          <button onClick={handleAddSkill} className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold rounded px-3 py-2">Add Skill</button>
+        </div>
+
+        <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
+          <h2 className="text-xl font-bold text-cyan-400">Experience</h2>
+          {experience.map((e) => (
+            <div key={e.id} className="bg-slate-700 rounded px-3 py-2 flex justify-between items-center">
+              <span className="text-white text-sm">{e.company} {e.role && `— ${e.role}`}</span>
+              <button onClick={() => handleDeleteExperience(e.id)} className="text-red-400 text-xs">Delete</button>
+            </div>
+          ))}
+          <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Company" value={company} onChange={(e) => setCompany(e.target.value)} />
+          <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Role" value={role} onChange={(e) => setRole(e.target.value)} />
+          <button onClick={handleAddExperience} className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold rounded px-3 py-2">Add Experience</button>
+        </div>
+
+        <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
+          <h2 className="text-xl font-bold text-cyan-400">Achievements</h2>
+          {achievements.map((a) => (
+            <div key={a.id} className="bg-slate-700 rounded px-3 py-2 flex justify-between items-center">
+              <span className="text-white text-sm">{a.title} {a.type && `(${a.type})`}</span>
+              <button onClick={() => handleDeleteAchievement(a.id)} className="text-red-400 text-xs">Delete</button>
+            </div>
+          ))}
+          <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Title" value={achTitle} onChange={(e) => setAchTitle(e.target.value)} />
+          <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="Type (e.g. hackathon)" value={achType} onChange={(e) => setAchType(e.target.value)} />
+          <button onClick={handleAddAchievement} className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold rounded px-3 py-2">Add Achievement</button>
         </div>
 
         {error && <p className="text-red-400 text-sm">{error}</p>}

@@ -6,6 +6,8 @@ import { requireAuth } from "./middleware/auth";
 import { validateProfileUpdate, type ProfileUpdateInput } from "./profile/validation";
 import { handleEducationRoutes } from "./education/routes";
 import { handleSkillsRoutes } from "./skills/routes";
+import { handleExperienceRoutes } from "./experience/routes";
+import { handleAchievementsRoutes } from "./achievements/routes";
 
 export interface Env {
   DB: D1Database;
@@ -50,6 +52,12 @@ export default {
 
     const skillsResponse = await handleSkillsRoutes(request, env, url);
     if (skillsResponse) return skillsResponse;
+
+    const experienceResponse = await handleExperienceRoutes(request, env, url);
+    if (experienceResponse) return experienceResponse;
+
+    const achievementsResponse = await handleAchievementsRoutes(request, env, url);
+    if (achievementsResponse) return achievementsResponse;
 
     // --- SIGNUP ---
     if (url.pathname === "/api/auth/signup" && request.method === "POST") {
