@@ -222,7 +222,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 py-10 flex justify-center">
-      <div className="w-[36rem] flex flex-col gap-6">
+      <div className="w-xl flex flex-col gap-6">
         <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
           <h1 className="text-2xl font-bold text-cyan-400">
             {profile.name}'s Profile

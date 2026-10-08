@@ -9,3 +9,10 @@ port = 8787
 binding = "DB"
 database_name = "profilex-db"
 database_id = "34de1664-3a6a-4700-a2b3-5db63aeb7a10"
+
+[ai]
+binding = "AI"
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "profilex-knowledge"

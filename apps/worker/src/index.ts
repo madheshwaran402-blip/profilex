@@ -9,9 +9,13 @@ import { handleSkillsRoutes } from "./skills/routes";
 import { handleExperienceRoutes } from "./experience/routes";
 import { handleAchievementsRoutes } from "./achievements/routes";
 import { handleProjectsRoutes } from "./projects/routes";
+import { syncProfileKnowledge } from "./knowledge/sync";
+import { getProfileIdForUser } from "./profile/helpers";
 
 export interface Env {
   DB: D1Database;
+  AI: Ai;
+  VECTORIZE: VectorizeIndex;
 }
 
 function json(data: unknown, status = 200): Response {
@@ -62,6 +66,19 @@ export default {
 
     const projectsResponse = await handleProjectsRoutes(request, env, url);
     if (projectsResponse) return projectsResponse;
+
+    // --- SYNC KNOWLEDGE (embeds profile data into Vectorize) ---
+    if (url.pathname === "/api/knowledge/sync" && request.method === "POST") {
+      const auth = await requireAuth(request, env);
+      if ("error" in auth) return auth.error;
+
+      const profileId = await getProfileIdForUser(env, auth.userId);
+      if (!profileId) return json({ error: "profile not found" }, 404);
+
+      const result = await syncProfileKnowledge(env, profileId);
+
+      return json({ success: true, chunks_created: result.chunksCreated });
+    }
 
     // --- SIGNUP ---
     if (url.pathname === "/api/auth/signup" && request.method === "POST") {
