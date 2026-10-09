@@ -11,6 +11,7 @@ import { handleAchievementsRoutes } from "./achievements/routes";
 import { handleProjectsRoutes } from "./projects/routes";
 import { syncProfileKnowledge } from "./knowledge/sync";
 import { getProfileIdForUser } from "./profile/helpers";
+import { handleChatRoutes } from "./chat/routes";
 
 export interface Env {
   DB: D1Database;
@@ -79,6 +80,9 @@ export default {
 
       return json({ success: true, chunks_created: result.chunksCreated });
     }
+
+    const chatResponse = await handleChatRoutes(request, env, url);
+    if (chatResponse) return chatResponse;
 
     // --- SIGNUP ---
     if (url.pathname === "/api/auth/signup" && request.method === "POST") {
