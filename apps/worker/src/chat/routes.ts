@@ -1,4 +1,5 @@
 import type { Env } from "../index";
+import { checkRateLimit } from "./rateLimit";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data, null, 2), {
@@ -35,7 +36,21 @@ export async function handleChatRoutes(
 
   const username = match[1];
 
-  const body = (await request.json()) as { message?: string };
+  // --- Rate limiting ---
+  const ipAddress = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  const allowed = await checkRateLimit(env, ipAddress);
+  if (!allowed) {
+    return json(
+      { error: "too many requests — please wait a moment and try again" },
+      429
+    );
+  }
+
+  const body = (await request.json()) as {
+    message?: string;
+    conversation_id?: string;
+  };
+
   if (!body.message || body.message.trim().length === 0) {
     return json({ error: "message is required" }, 400);
   }
@@ -57,58 +72,111 @@ export async function handleChatRoutes(
     return json({ error: "AI chat is not enabled for this profile" }, 403);
   }
 
-  // Embed the question
+  // --- Resolve or create the conversation ---
+  const now = new Date().toISOString();
+  let conversationId = body.conversation_id;
+
+  if (conversationId) {
+    const owned = await env.DB.prepare(
+      `SELECT id FROM conversations WHERE id = ? AND profile_id = ?`
+    )
+      .bind(conversationId, profile.id)
+      .first();
+
+    if (!owned) {
+      // conversation_id given but doesn't belong to this profile — start fresh instead of erroring
+      conversationId = undefined;
+    }
+  }
+
+  if (!conversationId) {
+    conversationId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO conversations (id, profile_id, visitor_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)`
+    )
+      .bind(conversationId, profile.id, ipAddress, now, now)
+      .run();
+  }
+
+  // Save the user's message
+  await env.DB.prepare(
+    `INSERT INTO chat_messages (id, conversation_id, role, content, created_at)
+     VALUES (?, ?, 'user', ?, ?)`
+  )
+    .bind(crypto.randomUUID(), conversationId, body.message, now)
+    .run();
+
+  // --- Embed the question and search Vectorize ---
   const questionEmbedding = await embedText(env, body.message);
 
-  // Search Vectorize, scoped strictly to this profile
-  // Search Vectorize, scoped strictly to this profile
   const matches = await env.VECTORIZE.query(questionEmbedding, {
     topK: 5,
     filter: { profile_id: profile.id },
     returnMetadata: true,
   });
 
+  let answer: string;
+  let sources: string[] = [];
+
   if (matches.matches.length === 0) {
-    return json({
-      answer: `I don't have enough information in ${profile.name}'s profile to answer that yet.`,
-      sources: [],
-    });
+    answer = `I don't have enough information in ${profile.name}'s profile to answer that yet.`;
+  } else {
+    const vectorIds = matches.matches.map((m) => m.id);
+    const placeholders = vectorIds.map(() => "?").join(",");
+
+    const chunks = await env.DB.prepare(
+      `SELECT content, source_type FROM knowledge_chunks
+       WHERE vector_id IN (${placeholders}) AND profile_id = ?`
+    )
+      .bind(...vectorIds, profile.id)
+      .all<{ content: string; source_type: string }>();
+
+    if (chunks.results.length === 0) {
+      answer = `I don't have enough information in ${profile.name}'s profile to answer that yet.`;
+    } else {
+      const context = chunks.results.map((c) => `- ${c.content}`).join("\n");
+
+      // Include recent conversation history for multi-turn context
+      const history = await env.DB.prepare(
+        `SELECT role, content FROM chat_messages
+         WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 10`
+      )
+        .bind(conversationId)
+        .all<{ role: string; content: string }>();
+
+      const historyMessages = history.results.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }));
+
+      const llmResult = (await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: `Profile context about ${profile.name}:\n${context}`,
+          },
+          ...historyMessages,
+        ],
+      })) as { response: string };
+
+      answer = llmResult.response;
+      sources = chunks.results.map((c) => c.source_type);
+    }
   }
 
-  // Fetch the actual text content for the matched vectors from D1
-  // (defense-in-depth: never trust Vectorize metadata alone for content)
-  const vectorIds = matches.matches.map((m) => m.id);
-  const placeholders = vectorIds.map(() => "?").join(",");
-
-  const chunks = await env.DB.prepare(
-    `SELECT content, source_type FROM knowledge_chunks
-     WHERE vector_id IN (${placeholders}) AND profile_id = ?`
+  // Save the assistant's reply
+  await env.DB.prepare(
+    `INSERT INTO chat_messages (id, conversation_id, role, content, created_at)
+     VALUES (?, ?, 'assistant', ?, ?)`
   )
-    .bind(...vectorIds, profile.id)
-    .all<{ content: string; source_type: string }>();
+    .bind(crypto.randomUUID(), conversationId, answer, new Date().toISOString())
+    .run();
 
-  if (chunks.results.length === 0) {
-    return json({
-      answer: `I don't have enough information in ${profile.name}'s profile to answer that yet.`,
-      sources: [],
-    });
-  }
+  await env.DB.prepare(`UPDATE conversations SET updated_at = ? WHERE id = ?`)
+    .bind(new Date().toISOString(), conversationId)
+    .run();
 
-  const context = chunks.results.map((c) => `- ${c.content}`).join("\n");
-
-  // Call the LLM with the retrieved context
-  const llmResult = (await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: `Profile context about ${profile.name}:\n${context}\n\nQuestion: ${body.message}`,
-      },
-    ],
-  })) as { response: string };
-
-  return json({
-    answer: llmResult.response,
-    sources: chunks.results.map((c) => c.source_type),
-  });
+  return json({ answer, sources, conversation_id: conversationId });
 }
