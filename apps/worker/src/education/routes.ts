@@ -1,6 +1,7 @@
 import type { Env } from "../index";
 import { requireAuth } from "../middleware/auth";
 import { getProfileIdForUser } from "../profile/helpers";
+import { triggerKnowledgeSync } from "../knowledge/trigger";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data, null, 2), {
@@ -79,6 +80,8 @@ export async function handleEducationRoutes(
       )
       .run();
 
+    await triggerKnowledgeSync(env, profileId);
+
     return json({ success: true, id });
   }
 
@@ -136,6 +139,8 @@ export async function handleEducationRoutes(
       .bind(...values)
       .run();
 
+    await triggerKnowledgeSync(env, profileId);
+
     return json({ success: true });
   }
 
@@ -160,8 +165,10 @@ export async function handleEducationRoutes(
       return json({ error: "education entry not found" }, 404);
     }
 
+    await triggerKnowledgeSync(env, profileId);
+
     return json({ success: true });
   }
 
-  return null; // not handled by this module
+  return null;
 }

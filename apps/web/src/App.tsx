@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Interview from "./Interview";
 import {
   signup,
   login,
@@ -19,13 +20,20 @@ import {
   getProjects,
   addProject,
   deleteProject,
+  uploadProfilePhoto,
+  togglePublish,
+  updateTheme,
+  syncKnowledge,
+  getAnalytics,
   type Profile,
   type Education,
   type Skill,
   type Experience,
   type Achievement,
   type Project,
+  type AnalyticsData,
 } from "./lib/api";
+import { THEME_PRESETS } from "./lib/themes";
 
 function App() {
   const [token, setToken] = useState<string | null>(null);
@@ -62,11 +70,16 @@ function App() {
   const [projectTech, setProjectTech] = useState("");
   const [projectGithub, setProjectGithub] = useState("");
 
+  const [syncStatus, setSyncStatus] = useState("");
+
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+
   async function loadEverything(tok: string) {
     const { profile } = await getProfile(tok);
     setProfile(profile);
     setTitle(profile.title || "");
     setAbout(profile.about || "");
+    setAnalytics(await getAnalytics(tok));
 
     setEducation((await getEducation(tok)).education);
     setSkills((await getSkills(tok)).skills);
@@ -93,6 +106,43 @@ function App() {
     if (!token) return;
     const { profile } = await updateProfile(token, { title, about });
     setProfile(profile);
+  }
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!token || !e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    try {
+      const result = await uploadProfilePhoto(token, file);
+      setProfile((prev) => (prev ? { ...prev, photo_url: result.photo_url } : prev));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleTogglePublish() {
+    if (!token || !profile) return;
+    const newState = !profile.published;
+    const result = await togglePublish(token, newState);
+    setProfile((prev) => (prev ? { ...prev, published: result.published ? 1 : 0 } : prev));
+  }
+
+  async function handleThemeChange(preset: string) {
+    if (!token) return;
+    await updateTheme(token, preset);
+    setProfile((prev) =>
+      prev ? { ...prev, theme_config: JSON.stringify({ preset }) } : prev
+    );
+  }
+
+  async function handleManualSync() {
+    if (!token) return;
+    setSyncStatus("Syncing...");
+    try {
+      const result = await syncKnowledge(token);
+      setSyncStatus(`Synced ${result.chunks_created} knowledge chunks`);
+    } catch {
+      setSyncStatus("Sync failed");
+    }
   }
 
   async function handleAddEducation() {
@@ -220,6 +270,8 @@ function App() {
     );
   }
 
+  const currentPreset = JSON.parse(profile.theme_config || '{"preset":"cyan"}').preset;
+
   return (
     <div className="min-h-screen bg-slate-900 py-10 flex justify-center">
       <div className="w-xl flex flex-col gap-6">
@@ -228,6 +280,22 @@ function App() {
             {profile.name}'s Profile
           </h1>
           <p className="text-slate-400 text-sm">profilex.app/{profile.slug}</p>
+
+          {profile.photo_url && (
+            <img
+              src={`http://localhost:8787${profile.photo_url}`}
+              alt="Profile"
+              className="w-20 h-20 rounded-full object-cover mb-2"
+            />
+          )}
+          <label className="text-slate-300 text-sm">Profile Photo</label>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handlePhotoUpload}
+            className="text-slate-300 text-sm"
+          />
+
           <label className="text-slate-300 text-sm">Title</label>
           <input
             className="bg-slate-700 text-white rounded px-3 py-2"
@@ -246,6 +314,48 @@ function App() {
           >
             Save Profile
           </button>
+
+          <div className="flex items-center justify-between mt-2 pt-3 border-t border-slate-700">
+            <span className="text-slate-300 text-sm">
+              Status: {profile.published ? "Published" : "Draft"}
+            </span>
+            <button
+              onClick={handleTogglePublish}
+              className={`font-bold rounded px-3 py-1 text-sm ${
+                profile.published
+                  ? "bg-slate-600 text-white hover:bg-slate-500"
+                  : "bg-green-500 text-slate-900 hover:bg-green-400"
+              }`}
+            >
+              {profile.published ? "Unpublish" : "Publish"}
+            </button>
+          </div>
+
+          {profile.published === 1 && (
+            <a
+              href={`/p/${profile.slug}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-cyan-400 text-xs underline"
+            >
+              View public page →
+            </a>
+          )}
+
+          <label className="text-slate-300 text-sm mt-2">Theme</label>
+          <div className="flex gap-2">
+            {Object.entries(THEME_PRESETS).map(([key, preset]) => (
+              <button
+                key={key}
+                onClick={() => handleThemeChange(key)}
+                className={`${preset.accentHover} rounded px-3 py-1 text-xs font-semibold text-slate-900 ${
+                  currentPreset === key ? "ring-2 ring-white" : ""
+                }`}
+              >
+                {preset.name}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
@@ -329,6 +439,39 @@ function App() {
           <input className="bg-slate-700 text-white rounded px-3 py-2" placeholder="GitHub URL" value={projectGithub} onChange={(e) => setProjectGithub(e.target.value)} />
           <button onClick={handleAddProject} className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold rounded px-3 py-2">Add Project</button>
         </div>
+
+        <div className="bg-slate-800 p-4 rounded-xl flex items-center justify-between">
+          <span className="text-slate-300 text-sm">
+            Your AI auto-updates when you edit your profile. Having issues? Sync manually.
+          </span>
+          <div className="flex items-center gap-2">
+            {syncStatus && <span className="text-slate-400 text-xs">{syncStatus}</span>}
+            <button
+              onClick={handleManualSync}
+              className="bg-slate-600 hover:bg-slate-500 text-white text-sm rounded px-3 py-1"
+            >
+              Sync Knowledge
+            </button>
+          </div>
+        </div>
+
+       {analytics && (
+          <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
+            <h2 className="text-xl font-bold text-cyan-400">Analytics</h2>
+            <div className="flex gap-6">
+              <div>
+                <p className="text-3xl font-bold text-white">{analytics.total_views}</p>
+                <p className="text-slate-400 text-sm">Profile Views</p>
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-white">{analytics.total_chat_messages}</p>
+                <p className="text-slate-400 text-sm">AI Conversations</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <Interview token={token} />
 
         {error && <p className="text-red-400 text-sm">{error}</p>}
       </div>

@@ -16,3 +16,7 @@ binding = "AI"
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "profilex-knowledge"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "profilex-files"

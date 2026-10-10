@@ -1,0 +1,1 @@
+ALTER TABLE profiles ADD COLUMN theme_config TEXT DEFAULT '{"preset":"cyan"}';

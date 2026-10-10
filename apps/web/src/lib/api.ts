@@ -15,6 +15,8 @@ export interface Profile {
   photo_url: string;
   ai_personality: string;
   slug: string;
+  published: number;
+  theme_config: string;
 }
 
 export async function signup(
@@ -215,6 +217,15 @@ export async function deleteExperience(token: string, id: string): Promise<void>
   if (!res.ok) throw new Error("failed to delete experience");
 }
 
+export async function syncKnowledge(token: string): Promise<{ success: boolean; chunks_created: number }> {
+  const res = await fetch(`${API_BASE}/api/knowledge/sync`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("failed to sync knowledge");
+  return res.json();
+}
+
 export async function getAchievements(token: string): Promise<{ achievements: Achievement[] }> {
   const res = await fetch(`${API_BASE}/api/achievements`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -300,4 +311,157 @@ export async function deleteProject(token: string, id: string): Promise<void> {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error("failed to delete project");
+}
+
+export interface PublicProfile {
+  name: string;
+  title: string | null;
+  about: string | null;
+  photo_url: string | null;
+  slug: string;
+  theme_config: string;
+}
+
+export async function getPublicProfile(username: string): Promise<PublicProfile> {
+  const res = await fetch(`${API_BASE}/p/${username}`);
+  if (!res.ok) {
+    throw new Error("profile not found");
+  }
+  const data = await res.json();
+  return data.profile;
+}
+
+export async function sendChatMessage(
+  username: string,
+  message: string,
+  conversationId?: string
+): Promise<{ answer: string; sources: string[]; conversation_id: string }> {
+  const res = await fetch(`${API_BASE}/api/chat/${username}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, conversation_id: conversationId }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "chat failed");
+  }
+  return res.json();
+}
+
+export async function uploadProfilePhoto(
+  token: string,
+  file: File
+): Promise<{ success: boolean; photo_url: string }> {
+  const res = await fetch(`${API_BASE}/api/upload/photo`, {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type,
+      Authorization: `Bearer ${token}`,
+    },
+    body: file,
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "failed to upload photo");
+  }
+  return res.json();
+}
+
+export async function togglePublish(
+  token: string,
+  publish: boolean
+): Promise<{ success: boolean; published: boolean }> {
+  const res = await fetch(`${API_BASE}/api/profile/publish`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ publish }),
+  });
+  if (!res.ok) throw new Error("failed to update publish status");
+  return res.json();
+}
+
+export async function updateTheme(
+  token: string,
+  preset: string
+): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/api/profile/theme`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ preset }),
+  });
+  if (!res.ok) throw new Error("failed to update theme");
+  return res.json();
+}
+
+export interface InterviewStartResponse {
+  session_id: string;
+  question: string;
+  question_number: number;
+}
+
+export interface InterviewAnswerResponse {
+  session_id: string;
+  done: boolean;
+  question?: string;
+  question_number?: number;
+  message?: string;
+}
+
+export async function startInterview(
+  token: string,
+  type: string
+): Promise<InterviewStartResponse> {
+  const res = await fetch(`${API_BASE}/api/interview/start`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ type }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "failed to start interview");
+  }
+  return res.json();
+}
+
+export async function submitInterviewAnswer(
+  token: string,
+  sessionId: string,
+  answer: string
+): Promise<InterviewAnswerResponse> {
+  const res = await fetch(`${API_BASE}/api/interview/answer`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ session_id: sessionId, answer }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "failed to submit answer");
+  }
+  return res.json();
+}
+
+export interface AnalyticsData {
+  total_views: number;
+  total_chat_messages: number;
+  recent_views: string[];
+}
+
+export async function getAnalytics(token: string): Promise<AnalyticsData> {
+  const res = await fetch(`${API_BASE}/api/analytics`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("failed to load analytics");
+  return res.json();
 }

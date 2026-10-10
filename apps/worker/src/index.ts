@@ -4,19 +4,25 @@ import { validateUsername } from "./auth/validation";
 import { createVerificationToken, verifyEmailToken } from "./auth/verification";
 import { requireAuth } from "./middleware/auth";
 import { validateProfileUpdate, type ProfileUpdateInput } from "./profile/validation";
+import { getProfileIdForUser } from "./profile/helpers";
 import { handleEducationRoutes } from "./education/routes";
 import { handleSkillsRoutes } from "./skills/routes";
 import { handleExperienceRoutes } from "./experience/routes";
 import { handleAchievementsRoutes } from "./achievements/routes";
 import { handleProjectsRoutes } from "./projects/routes";
 import { syncProfileKnowledge } from "./knowledge/sync";
-import { getProfileIdForUser } from "./profile/helpers";
 import { handleChatRoutes } from "./chat/routes";
+import { handlePublicProfileRoutes } from "./public/routes";
+import { handleUploadRoutes } from "./upload/routes";
+import { handleInterviewRoutes } from "./interview/routes";
+import { handleAnalyticsRoutes } from "./analytics/routes";
+import { handleResumeRoutes } from "./resume/routes";
 
 export interface Env {
   DB: D1Database;
   AI: Ai;
   VECTORIZE: VectorizeIndex;
+  FILES: R2Bucket;
 }
 
 function json(data: unknown, status = 200): Response {
@@ -53,6 +59,7 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
+    // --- Sub-resource route modules (checked first) ---
     const educationResponse = await handleEducationRoutes(request, env, url);
     if (educationResponse) return educationResponse;
 
@@ -67,6 +74,15 @@ export default {
 
     const projectsResponse = await handleProjectsRoutes(request, env, url);
     if (projectsResponse) return projectsResponse;
+
+    const interviewResponse = await handleInterviewRoutes(request, env, url);
+    if (interviewResponse) return interviewResponse;
+
+    const analyticsResponse = await handleAnalyticsRoutes(request, env, url);
+    if (analyticsResponse) return analyticsResponse;
+
+    const resumeResponse = await handleResumeRoutes(request, env, url);
+    if (resumeResponse) return resumeResponse;
 
     // --- SYNC KNOWLEDGE (embeds profile data into Vectorize) ---
     if (url.pathname === "/api/knowledge/sync" && request.method === "POST") {
@@ -83,6 +99,12 @@ export default {
 
     const chatResponse = await handleChatRoutes(request, env, url);
     if (chatResponse) return chatResponse;
+
+    const publicProfileResponse = await handlePublicProfileRoutes(request, env, url);
+    if (publicProfileResponse) return publicProfileResponse;
+
+    const uploadResponse = await handleUploadRoutes(request, env, url);
+    if (uploadResponse) return uploadResponse;
 
     // --- SIGNUP ---
     if (url.pathname === "/api/auth/signup" && request.method === "POST") {
@@ -199,8 +221,6 @@ export default {
 
       const token = await createVerificationToken(env, auth.userId);
 
-      // NOTE: no email service wired up yet (that's a later day).
-      // For now we return the token directly so you can test the flow.
       return json({
         success: true,
         message: "verification token created (would normally be emailed)",
@@ -336,14 +356,14 @@ export default {
       });
     }
 
-// --- GET PROFILE ---
+    // --- GET PROFILE ---
     if (url.pathname === "/api/profile" && request.method === "GET") {
       const auth = await requireAuth(request, env);
       if ("error" in auth) return auth.error;
 
       const profile = await env.DB.prepare(
         `SELECT id, name, title, location, about, photo_url, ai_personality,
-                ai_enabled, slug, published, created_at, updated_at
+        ai_enabled, slug, published, theme_config, created_at, updated_at
          FROM profiles WHERE user_id = ?`
       )
         .bind(auth.userId)
@@ -416,6 +436,46 @@ export default {
         .first();
 
       return json({ success: true, profile: updated });
+    }
+
+    // --- TOGGLE PUBLISHED STATUS ---
+    if (url.pathname === "/api/profile/publish" && request.method === "POST") {
+      const auth = await requireAuth(request, env);
+      if ("error" in auth) return auth.error;
+
+      const body = (await request.json()) as { publish?: boolean };
+      const publishValue = body.publish === false ? 0 : 1;
+
+      await env.DB.prepare(
+        `UPDATE profiles SET published = ?, updated_at = ? WHERE user_id = ?`
+      )
+        .bind(publishValue, new Date().toISOString(), auth.userId)
+        .run();
+
+      return json({ success: true, published: publishValue === 1 });
+    }
+
+    // --- UPDATE THEME ---
+    if (url.pathname === "/api/profile/theme" && request.method === "PUT") {
+      const auth = await requireAuth(request, env);
+      if ("error" in auth) return auth.error;
+
+      const body = (await request.json()) as { preset?: string };
+      const validPresets = ["cyan", "violet", "emerald", "amber"];
+
+      if (!body.preset || !validPresets.includes(body.preset)) {
+        return json({ error: `preset must be one of: ${validPresets.join(", ")}` }, 400);
+      }
+
+      const themeConfig = JSON.stringify({ preset: body.preset });
+
+      await env.DB.prepare(
+        `UPDATE profiles SET theme_config = ?, updated_at = ? WHERE user_id = ?`
+      )
+        .bind(themeConfig, new Date().toISOString(), auth.userId)
+        .run();
+
+      return json({ success: true });
     }
 
     // --- PROTECTED: current logged-in user ---
