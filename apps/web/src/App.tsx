@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Interview from "./Interview";
+import ResumeImport from "./ResumeImport";
 import {
   signup,
   login,
@@ -71,7 +72,6 @@ function App() {
   const [projectGithub, setProjectGithub] = useState("");
 
   const [syncStatus, setSyncStatus] = useState("");
-
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
 
   async function loadEverything(tok: string) {
@@ -79,13 +79,13 @@ function App() {
     setProfile(profile);
     setTitle(profile.title || "");
     setAbout(profile.about || "");
-    setAnalytics(await getAnalytics(tok));
 
     setEducation((await getEducation(tok)).education);
     setSkills((await getSkills(tok)).skills);
     setExperience((await getExperience(tok)).experience);
     setAchievements((await getAchievements(tok)).achievements);
     setProjects((await getProjects(tok)).projects);
+    setAnalytics(await getAnalytics(tok));
   }
 
   async function handleAuth() {
@@ -143,6 +143,14 @@ function App() {
     } catch {
       setSyncStatus("Sync failed");
     }
+  }
+
+  async function handleResumeImported() {
+    if (!token) return;
+    setEducation((await getEducation(token)).education);
+    setSkills((await getSkills(token)).skills);
+    setExperience((await getExperience(token)).experience);
+    setProjects((await getProjects(token)).projects);
   }
 
   async function handleAddEducation() {
@@ -358,6 +366,24 @@ function App() {
           </div>
         </div>
 
+        {analytics && (
+          <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
+            <h2 className="text-xl font-bold text-cyan-400">Analytics</h2>
+            <div className="flex gap-6">
+              <div>
+                <p className="text-3xl font-bold text-white">{analytics.total_views}</p>
+                <p className="text-slate-400 text-sm">Profile Views</p>
+              </div>
+              <div>
+                <p className="text-3xl font-bold text-white">{analytics.total_chat_messages}</p>
+                <p className="text-slate-400 text-sm">AI Conversations</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <ResumeImport token={token} onImported={handleResumeImported} />
+
         <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
           <h2 className="text-xl font-bold text-cyan-400">Education</h2>
           {education.map((e) => (
@@ -454,22 +480,6 @@ function App() {
             </button>
           </div>
         </div>
-
-       {analytics && (
-          <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
-            <h2 className="text-xl font-bold text-cyan-400">Analytics</h2>
-            <div className="flex gap-6">
-              <div>
-                <p className="text-3xl font-bold text-white">{analytics.total_views}</p>
-                <p className="text-slate-400 text-sm">Profile Views</p>
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-white">{analytics.total_chat_messages}</p>
-                <p className="text-slate-400 text-sm">AI Conversations</p>
-              </div>
-            </div>
-          </div>
-        )}
 
         <Interview token={token} />
 

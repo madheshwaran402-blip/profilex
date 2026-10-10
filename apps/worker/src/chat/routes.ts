@@ -6,7 +6,7 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: {
       "content-type": "application/json",
-      "Access-Control-Allow-Origin": "http://localhost:5173",
+      "Access-Control-Allow-Origin": "https://5d107808.profilex-9kl.pages.dev",
     },
   });
 }

@@ -30,7 +30,7 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: {
       "content-type": "application/json",
-      "Access-Control-Allow-Origin": "http://localhost:5173",
+      "Access-Control-Allow-Origin": "https://5d107808.profilex-9kl.pages.dev",
     },
   });
 }
@@ -50,7 +50,7 @@ export default {
     const url = new URL(request.url);
 
     const corsHeaders = {
-      "Access-Control-Allow-Origin": "http://localhost:5173",
+      "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
     };

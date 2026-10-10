@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:8787";
+const API_BASE = "https://profilex-worker.madheshwaran402.workers.dev";
 
 export interface SignupResponse {
   success: boolean;
@@ -463,5 +463,31 @@ export async function getAnalytics(token: string): Promise<AnalyticsData> {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error("failed to load analytics");
+  return res.json();
+}
+
+export interface ResumeSuggestions {
+  skills: string[];
+  education: { institution: string; degree?: string; branch?: string }[];
+  experience: { company: string; role?: string }[];
+  projects: { name: string; short_description?: string }[];
+}
+
+export async function uploadResume(
+  token: string,
+  file: File
+): Promise<{ success: boolean; document_id: string; suggestions: ResumeSuggestions }> {
+  const res = await fetch(`${API_BASE}/api/resume/upload`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/pdf",
+      Authorization: `Bearer ${token}`,
+    },
+    body: file,
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "failed to upload resume");
+  }
   return res.json();
 }
