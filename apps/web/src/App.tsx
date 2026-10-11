@@ -78,6 +78,8 @@ function App() {
   const [syncStatus, setSyncStatus] = useState("");
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
 
+  const [displayName, setDisplayName] = useState("");
+
   useEffect(() => {
     if (token && !profile) {
       loadEverything(token).catch(() => {
@@ -93,6 +95,7 @@ function App() {
     setProfile(profile);
     setTitle(profile.title || "");
     setAbout(profile.about || "");
+    setDisplayName(profile.name || "");
 
     setEducation((await getEducation(tok)).education);
     setSkills((await getSkills(tok)).skills);
@@ -128,7 +131,7 @@ function App() {
 
   async function handleSaveProfile() {
     if (!token) return;
-    const { profile } = await updateProfile(token, { title, about });
+    const { profile } = await updateProfile(token, { name: displayName, about });
     setProfile(profile);
   }
 
@@ -334,6 +337,14 @@ function App() {
             accept="image/jpeg,image/png,image/webp"
             onChange={handlePhotoUpload}
             className="text-slate-300 text-sm"
+          />
+
+<label className="text-slate-300 text-sm">Display Name</label>
+          <input
+            className="bg-slate-700 text-white rounded px-3 py-2"
+            placeholder="How your name should appear (e.g. Madheshwaran)"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
           />
 
           <label className="text-slate-300 text-sm">Title</label>

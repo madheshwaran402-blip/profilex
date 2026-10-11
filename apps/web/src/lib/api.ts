@@ -322,13 +322,40 @@ export interface PublicProfile {
   theme_config: string;
 }
 
-export async function getPublicProfile(username: string): Promise<PublicProfile> {
+export interface PublicSkill {
+  name: string;
+  category: string | null;
+}
+
+export interface PublicProject {
+  name: string;
+  short_description: string | null;
+  tech_stack: string | null;
+  github_url: string | null;
+  demo_url: string | null;
+  featured: number;
+}
+
+export interface PublicEducation {
+  institution: string;
+  degree: string | null;
+  branch: string | null;
+  cgpa: string | null;
+}
+
+export interface PublicProfileData {
+  profile: PublicProfile;
+  skills: PublicSkill[];
+  projects: PublicProject[];
+  education: PublicEducation[];
+}
+
+export async function getPublicProfile(username: string): Promise<PublicProfileData> {
   const res = await fetch(`${API_BASE}/p/${username}`);
   if (!res.ok) {
     throw new Error("profile not found");
   }
-  const data = await res.json();
-  return data.profile;
+  return res.json();
 }
 
 export async function sendChatMessage(
