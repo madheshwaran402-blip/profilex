@@ -18,6 +18,7 @@ import { handleInterviewRoutes } from "./interview/routes";
 import { handleAnalyticsRoutes } from "./analytics/routes";
 import { handleResumeRoutes } from "./resume/routes";
 import { jsonResponse as json, corsHeaders } from "./lib/cors";
+import { checkAuthRateLimit } from "./auth/rateLimit";
 
 export interface Env {
   DB: D1Database;
@@ -98,6 +99,12 @@ export default {
 
     // --- SIGNUP ---
     if (url.pathname === "/api/auth/signup" && request.method === "POST") {
+      const signupIp = request.headers.get("CF-Connecting-IP") ?? "unknown";
+      const signupAllowed = await checkAuthRateLimit(env, signupIp, "signup");
+      if (!signupAllowed) {
+        return json({ error: "too many signup attempts — please wait a moment" }, 429);
+      }
+
       const body = (await request.json()) as {
         email?: string;
         username?: string;
@@ -157,6 +164,12 @@ export default {
 
     // --- LOGIN ---
     if (url.pathname === "/api/auth/login" && request.method === "POST") {
+      const loginIp = request.headers.get("CF-Connecting-IP") ?? "unknown";
+      const loginAllowed = await checkAuthRateLimit(env, loginIp, "login");
+      if (!loginAllowed) {
+        return json({ error: "too many login attempts — please wait a moment" }, 429);
+      }
+
       const body = (await request.json()) as { email?: string; password?: string };
       const { email, password } = body;
 
