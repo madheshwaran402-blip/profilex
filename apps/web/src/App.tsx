@@ -310,7 +310,7 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-900 py-10 flex justify-center">
       <div className="w-full max-w-xl px-4 flex flex-col gap-6">
-        <div className="bg-slate-800 p-8 rounded-xl w-full max-w-sm mx-4 flex flex-col gap-3">
+        <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
           <div className="flex justify-between items-start">
             <h1 className="text-2xl font-bold text-cyan-400">
               {profile.name}'s Profile
@@ -394,13 +394,13 @@ function App() {
           )}
 
           <label className="text-slate-300 text-sm mt-2">Theme</label>
-          <div className="flex gap-2 flex-wrap">
+          <div className="grid grid-cols-4 gap-2">
             {Object.entries(THEME_PRESETS).map(([key, preset]) => (
               <button
                 key={key}
                 onClick={() => handleThemeChange(key)}
-                className={`${preset.accentHover} rounded px-3 py-1 text-xs font-semibold text-slate-900 ${
-                  currentPreset === key ? "ring-2 ring-white" : ""
+                className={`${preset.accentHover} h-9 flex items-center justify-center rounded text-xs font-semibold text-slate-900 border-2 ${
+                  currentPreset === key ? "border-white" : "border-transparent"
                 }`}
               >
                 {preset.name}
