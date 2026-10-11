@@ -204,18 +204,12 @@ export default {
       return json({ success: true, message: "logged out" });
     }
 
-    // --- REQUEST EMAIL VERIFICATION ---
+    // --- REQUEST EMAIL VERIFICATION (disabled until email sending is wired up) ---
     if (url.pathname === "/api/auth/request-verification" && request.method === "POST") {
-      const auth = await requireAuth(request, env);
-      if ("error" in auth) return auth.error;
-
-      const token = await createVerificationToken(env, auth.userId);
-
-      return json({
-        success: true,
-        message: "verification token created (would normally be emailed)",
-        verification_token: token,
-      });
+      return json(
+        { error: "email verification is not yet available" },
+        501
+      );
     }
 
     // --- VERIFY EMAIL ---
