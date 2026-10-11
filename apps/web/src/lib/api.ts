@@ -498,3 +498,30 @@ export async function logout(token: string): Promise<void> {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
+
+export interface GeneratedResume {
+  summary: string;
+  skills: string[];
+  education: { institution: string; degree?: string; branch?: string }[];
+  experience: { company: string; role?: string; description?: string }[];
+  projects: { name: string; description?: string; tech_stack?: string }[];
+}
+
+export async function generateResume(
+  token: string,
+  target: string
+): Promise<{ name: string; title: string; resume: GeneratedResume }> {
+  const res = await fetch(`${API_BASE}/api/resume/generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ target }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "failed to generate resume");
+  }
+  return res.json();
+}

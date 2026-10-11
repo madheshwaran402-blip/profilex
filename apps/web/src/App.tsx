@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import Interview from "./Interview";
 import ResumeImport from "./ResumeImport";
+import ResumeGenerator from "./ResumeGenerator";
 import {
   signup,
   login,
@@ -414,6 +415,7 @@ function App() {
         )}
 
         <ResumeImport token={token} onImported={handleResumeImported} />
+        <ResumeGenerator token={token} />
 
         <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
           <h2 className="text-xl font-bold text-cyan-400">Education</h2>

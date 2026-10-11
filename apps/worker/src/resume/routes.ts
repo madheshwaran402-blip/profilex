@@ -152,5 +152,147 @@ If a field isn't present in the resume, omit it or use an empty array. Output ON
     });
   }
 
+  // POST /api/resume/generate — AI-tailored resume for a target job
+  if (url.pathname === "/api/resume/generate" && request.method === "POST") {
+    const auth = await requireAuth(request, env);
+    if ("error" in auth) return auth.error;
+
+    const profileId = await getProfileIdForUser(env, auth.userId);
+    if (!profileId) return json({ error: "profile not found" }, 404);
+
+    const body = (await request.json()) as { target?: string };
+    if (!body.target || body.target.trim().length < 2) {
+      return json({ error: "target job type or description is required" }, 400);
+    }
+
+    const profile = await env.DB.prepare(
+      `SELECT name, title, about FROM profiles WHERE id = ?`
+    )
+      .bind(profileId)
+      .first<{ name: string; title: string; about: string }>();
+
+    const skills = await env.DB.prepare(
+      `SELECT name, category FROM skills WHERE profile_id = ?`
+    )
+      .bind(profileId)
+      .all<{ name: string; category: string | null }>();
+
+    const education = await env.DB.prepare(
+      `SELECT institution, degree, branch, cgpa FROM education WHERE profile_id = ?`
+    )
+      .bind(profileId)
+      .all<{ institution: string; degree: string | null; branch: string | null; cgpa: string | null }>();
+
+    const experience = await env.DB.prepare(
+      `SELECT company, role, description FROM experience WHERE profile_id = ?`
+    )
+      .bind(profileId)
+      .all<{ company: string; role: string | null; description: string | null }>();
+
+    const projects = await env.DB.prepare(
+      `SELECT name, short_description, description, tech_stack, role FROM projects WHERE profile_id = ?`
+    )
+      .bind(profileId)
+      .all<{ name: string; short_description: string | null; description: string | null; tech_stack: string | null; role: string | null }>();
+
+    const achievements = await env.DB.prepare(
+      `SELECT title, type, description FROM achievements WHERE profile_id = ?`
+    )
+      .bind(profileId)
+      .all<{ title: string; type: string | null; description: string | null }>();
+
+    if (skills.results.length === 0 && projects.results.length === 0) {
+      return json({ error: "add some skills or projects before generating a resume" }, 400);
+    }
+
+    const sourceData = {
+      profile,
+      skills: skills.results,
+      education: education.results,
+      experience: experience.results,
+      projects: projects.results,
+      achievements: achievements.results,
+    };
+
+    const systemPrompt = `You are a resume-tailoring assistant. You will receive a candidate's ACTUAL profile data (skills, education, experience, projects, achievements) and a target job/role.
+
+RULES:
+- You may ONLY select, reorder, and rephrase information that already exists in the supplied data.
+- NEVER invent a skill, project, company, degree, or achievement that is not present in the data.
+- Select and order skills/projects/experience that are MOST RELEVANT to the target job first.
+- Write a short 2-3 sentence professional summary synthesizing only the supplied facts, tailored to the target job.
+- If the data has nothing relevant to a section (e.g. no experience), return an empty array for it — do not fabricate.
+- Output valid JSON only, matching the required schema.`;
+
+    const llmResult = (await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `Target job/role: ${body.target}\n\nCandidate data:\n${JSON.stringify(sourceData)}`,
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          type: "object",
+          properties: {
+            summary: { type: "string" },
+            skills: { type: "array", items: { type: "string" } },
+            education: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  institution: { type: "string" },
+                  degree: { type: "string" },
+                  branch: { type: "string" },
+                },
+              },
+            },
+            experience: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  company: { type: "string" },
+                  role: { type: "string" },
+                  description: { type: "string" },
+                },
+              },
+            },
+            projects: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  description: { type: "string" },
+                  tech_stack: { type: "string" },
+                },
+              },
+            },
+          },
+          required: ["summary", "skills", "education", "experience", "projects"],
+        },
+      },
+    })) as {
+      response: {
+        summary: string;
+        skills: string[];
+        education: { institution: string; degree?: string; branch?: string }[];
+        experience: { company: string; role?: string; description?: string }[];
+        projects: { name: string; description?: string; tech_stack?: string }[];
+      };
+    };
+
+    return json({
+      success: true,
+      name: profile?.name,
+      title: profile?.title,
+      resume: llmResult.response,
+    });
+  }
+
   return null;
 }
