@@ -52,13 +52,16 @@ export async function handleChatRoutes(
 
   // Resolve the profile by public slug
   const profile = await env.DB.prepare(
-    `SELECT id, name, ai_enabled FROM profiles WHERE slug = ?`
+    `SELECT id, name, ai_enabled, published FROM profiles WHERE slug = ?`
   )
     .bind(username)
-    .first<{ id: string; name: string; ai_enabled: number }>();
+    .first<{ id: string; name: string; ai_enabled: number; published: number }>();
 
-  if (!profile) {
+  if (!profile || !profile.published) {
     return json({ error: "profile not found" }, 404);
+  }
+  if (!profile.ai_enabled) {
+    return json({ error: "AI chat is not enabled for this profile" }, 403);
   }
   await env.DB.prepare(
     `INSERT INTO analytics_events (id, profile_id, event_type, created_at)
