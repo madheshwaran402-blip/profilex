@@ -2,16 +2,7 @@ import type { Env } from "../index";
 import { requireAuth } from "../middleware/auth";
 import { getProfileIdForUser } from "../profile/helpers";
 import { triggerKnowledgeSync } from "../knowledge/trigger";
-
-function json(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data, null, 2), {
-    status,
-    headers: {
-      "content-type": "application/json",
-      "Access-Control-Allow-Origin": "https://5d107808.profilex-9kl.pages.dev",
-    },
-  });
-}
+import { jsonResponse as json } from "../lib/cors";
 
 const VALID_VISIBILITY = ["public", "ai_only", "private"];
 

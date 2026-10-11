@@ -17,6 +17,7 @@ import { handleUploadRoutes } from "./upload/routes";
 import { handleInterviewRoutes } from "./interview/routes";
 import { handleAnalyticsRoutes } from "./analytics/routes";
 import { handleResumeRoutes } from "./resume/routes";
+import { jsonResponse as json, corsHeaders } from "./lib/cors";
 
 export interface Env {
   DB: D1Database;
@@ -25,15 +26,6 @@ export interface Env {
   FILES: R2Bucket;
 }
 
-function json(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data, null, 2), {
-    status,
-    headers: {
-      "content-type": "application/json",
-      "Access-Control-Allow-Origin": "https://5d107808.profilex-9kl.pages.dev",
-    },
-  });
-}
 
 async function hashTokenForLookup(token: string): Promise<string> {
   const digest = await crypto.subtle.digest(
@@ -49,11 +41,9 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    };
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
+    }
 
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
@@ -363,7 +353,7 @@ export default {
 
       const profile = await env.DB.prepare(
         `SELECT id, name, title, location, about, photo_url, ai_personality,
-        ai_enabled, slug, published, theme_config, created_at, updated_at
+                ai_enabled, slug, published, theme_config, created_at, updated_at
          FROM profiles WHERE user_id = ?`
       )
         .bind(auth.userId)

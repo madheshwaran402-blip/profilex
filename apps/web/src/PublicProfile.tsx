@@ -78,7 +78,7 @@ function PublicProfile() {
         <div className="text-center">
           {profile.photo_url && (
             <img
-              src={`http://localhost:8787${profile.photo_url}`}
+  src={`https://profilex-worker.madheshwaran402.workers.dev${profile.photo_url}`}
               alt={profile.name}
               className="w-24 h-24 rounded-full mx-auto mb-4 object-cover"
             />
@@ -88,7 +88,7 @@ function PublicProfile() {
           {profile.about && <p className="text-slate-400 mt-3 text-sm">{profile.about}</p>}
         </div>
 
-        <div className={`${theme.card} rounded-xl flex flex-col h-112`}>
+        <div className={`${theme.card} rounded-xl flex flex-col h-96 sm:h-112`}>
           <div className="px-4 py-3 border-b border-slate-700">
             <h2 className="text-cyan-400 font-semibold text-sm">
               Ask {profile.name}'s AI

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Interview from "./Interview";
 import ResumeImport from "./ResumeImport";
 import {
@@ -26,6 +26,7 @@ import {
   updateTheme,
   syncKnowledge,
   getAnalytics,
+  logout,
   type Profile,
   type Education,
   type Skill,
@@ -37,7 +38,9 @@ import {
 import { THEME_PRESETS } from "./lib/themes";
 
 function App() {
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(
+    () => localStorage.getItem("profilex_token")
+  );
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState("");
 
@@ -74,6 +77,16 @@ function App() {
   const [syncStatus, setSyncStatus] = useState("");
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
 
+  useEffect(() => {
+    if (token && !profile) {
+      loadEverything(token).catch(() => {
+        localStorage.removeItem("profilex_token");
+        setToken(null);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function loadEverything(tok: string) {
     const { profile } = await getProfile(tok);
     setProfile(profile);
@@ -95,11 +108,21 @@ function App() {
         mode === "signup"
           ? await signup(email, username, password)
           : await login(email, password);
+      localStorage.setItem("profilex_token", result.session_token);
       setToken(result.session_token);
       await loadEverything(result.session_token);
     } catch (e) {
       setError((e as Error).message);
     }
+  }
+
+  async function handleLogout() {
+    if (token) {
+      await logout(token).catch(() => {});
+    }
+    localStorage.removeItem("profilex_token");
+    setToken(null);
+    setProfile(null);
   }
 
   async function handleSaveProfile() {
@@ -282,16 +305,24 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 py-10 flex justify-center">
-      <div className="w-xl flex flex-col gap-6">
-        <div className="bg-slate-800 p-6 rounded-xl flex flex-col gap-3">
-          <h1 className="text-2xl font-bold text-cyan-400">
-            {profile.name}'s Profile
-          </h1>
+      <div className="w-full max-w-xl px-4 flex flex-col gap-6">
+        <div className="bg-slate-800 p-8 rounded-xl w-full max-w-sm mx-4 flex flex-col gap-3">
+          <div className="flex justify-between items-start">
+            <h1 className="text-2xl font-bold text-cyan-400">
+              {profile.name}'s Profile
+            </h1>
+            <button
+              onClick={handleLogout}
+              className="text-slate-400 hover:text-white text-sm underline"
+            >
+              Log out
+            </button>
+          </div>
           <p className="text-slate-400 text-sm">profilex.app/{profile.slug}</p>
 
           {profile.photo_url && (
             <img
-              src={`http://localhost:8787${profile.photo_url}`}
+  src={`https://profilex-worker.madheshwaran402.workers.dev${profile.photo_url}`}
               alt="Profile"
               className="w-20 h-20 rounded-full object-cover mb-2"
             />
@@ -351,7 +382,7 @@ function App() {
           )}
 
           <label className="text-slate-300 text-sm mt-2">Theme</label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {Object.entries(THEME_PRESETS).map(([key, preset]) => (
               <button
                 key={key}

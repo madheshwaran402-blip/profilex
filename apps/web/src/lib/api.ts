@@ -491,3 +491,10 @@ export async function uploadResume(
   }
   return res.json();
 }
+
+export async function logout(token: string): Promise<void> {
+  await fetch(`${API_BASE}/api/auth/logout`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}

@@ -1,14 +1,5 @@
 import type { Env } from "../index";
-
-function json(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data, null, 2), {
-    status,
-    headers: {
-      "content-type": "application/json",
-      "Access-Control-Allow-Origin": "https://5d107808.profilex-9kl.pages.dev",
-    },
-  });
-}
+import { jsonResponse as json } from "../lib/cors";
 
 export async function handlePublicProfileRoutes(
   request: Request,
